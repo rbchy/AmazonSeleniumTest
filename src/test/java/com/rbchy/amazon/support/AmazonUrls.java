@@ -63,7 +63,7 @@ public final class AmazonUrls {
     public static Double parsePrice(String text) {
         if (text == null) return null;
         String digits = text.replaceAll("[^0-9.]", "");
-        if (digits.isEmpty() || digits.chars().filter(c -> c == '.').count() > 1) return null;
+        if (!digits.matches("\\d+(\\.\\d+)?")) return null; // e.g. "." left over from "unavailable."
         return Double.valueOf(digits);
     }
 }
