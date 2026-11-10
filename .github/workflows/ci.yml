@@ -1,0 +1,66 @@
+# Amazon / Google / Gmail Selenium + Cucumber — CI
+#   unit    : JUnit 5 tests of the helpers (URL builder, bot-wall detector, credentials guard)
+#             + a Cucumber dry run that proves every step of every feature has code behind it
+#             -> gates the build
+#   live    : the @live scenarios (Amazon search, Google search) in headless Chrome.
+#             Amazon and Google often answer cloud IPs with a captcha / "unusual traffic" page;
+#             the framework then reports the scenario as SKIPPED with the reason. Informational.
+#   @manual : Gmail login needs a real account and a normal network - never run in CI.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests + Cucumber dry run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Unit tests (no browser)
+        run: mvn -B -ntp test -Punit
+      - name: Cucumber dry run - every step is implemented (all features, incl. @manual)
+        run: >
+          mvn -B -ntp test -Dtest=RunCucumberTest -Dsurefire.failIfNoSpecifiedTests=false
+          -Dcucumber.execution.dry-run=true -Dcucumber.filter.tags=
+          -Dcucumber.junit-platform.naming-strategy=long
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-reports
+          path: target/surefire-reports
+          if-no-files-found: ignore
+
+  live:
+    name: Live scenarios (headless Chrome, informational)
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Cucumber @live (Amazon + Google)
+        run: mvn -B -ntp test -Dtest=RunCucumberTest -Dheadless=true "-Dcucumber.filter.tags=@live"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cucumber-report
+          path: target/cucumber-reports
+          if-no-files-found: ignore
